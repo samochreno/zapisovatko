@@ -333,7 +333,10 @@
             
             <!-- Records Table -->
             <div>
-              <h2 class="text-lg font-semibold mb-4">Záznamy podnikov</h2>
+              <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-semibold">Záznamy podnikov</h2>
+                <span class="text-sm text-gray-600">Celkom {{ totalRecords }} záznamov</span>
+              </div>
               
               <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-200">
@@ -355,7 +358,7 @@
                     </tr>
                   </thead>
                   <tbody class="bg-white divide-y divide-gray-200">
-                    <tr v-for="record in records" :key="record.id" class="hover:bg-gray-50">
+                    <tr v-for="record in paginatedRecords" :key="record.id" class="hover:bg-gray-50">
                       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         <span>{{ record.business.name }}</span>
                       </td>
@@ -521,13 +524,86 @@
                         </button>
                       </td>
                     </tr>
-                    <tr v-if="records.length === 0">
-                      <td colspan="8" class="px-6 py-4 text-center text-sm text-gray-500">
+                    <tr v-if="totalRecords === 0">
+                      <td colspan="13" class="px-6 py-4 text-center text-sm text-gray-500">
                         Nenašli sa žiadne záznamy. Pridajte svoj prvý záznam vyššie.
                       </td>
                     </tr>
                   </tbody>
                 </table>
+              </div>
+              
+              <!-- Pagination Controls -->
+              <div v-if="totalRecords > 0" class="mt-4 flex items-center justify-between flex-col md:flex-row gap-y-3">
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm text-gray-700">Zobrazených</span>
+                  <select 
+                    v-model="itemsPerPage" 
+                    @change="changeItemsPerPage(itemsPerPage)"
+                    class="border-gray-300 rounded-md text-sm"
+                  >
+                    <option :value="5">5</option>
+                    <option :value="10">10</option>
+                    <option :value="25">25</option>
+                    <option :value="50">50</option>
+                    <option :value="100">100</option>
+                  </select>
+                  <span class="text-sm text-gray-700">záznamov na stránku</span>
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                  <span class="text-sm text-gray-700">{{ paginationInfo }}</span>
+                </div>
+                
+                <div class="flex items-center space-x-1">
+                  <button 
+                    @click="goToPage(1)" 
+                    :disabled="currentPage === 1"
+                    class="px-2 py-1 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <<
+                  </button>
+                  
+                  <button 
+                    @click="prevPage" 
+                    :disabled="currentPage === 1"
+                    class="px-2 py-1 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                   <
+                  </button>
+                  
+                  <div class="flex space-x-1">
+                    <button 
+                      v-for="page in getVisiblePages" 
+                      :key="page"
+                      @click="goToPage(page)"
+                      :class="[
+                        'px-3 py-1 text-sm border rounded-md',
+                        page === currentPage 
+                          ? 'bg-blue-500 text-white border-blue-500' 
+                          : 'hover:bg-gray-50'
+                      ]"
+                    >
+                      {{ page }}
+                    </button>
+                  </div>
+                  
+                  <button 
+                    @click="nextPage" 
+                    :disabled="currentPage === totalPages"
+                    class="px-2 py-1 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    >
+                  </button>
+                  
+                  <button 
+                    @click="goToPage(totalPages)" 
+                    :disabled="currentPage === totalPages"
+                    class="px-2 py-1 text-sm border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                   >>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -552,6 +628,10 @@ const props = defineProps({
 const showNewBusinessForm = ref(false);
 const showEditBusinessForm = ref(false);
 const currentDate = ref(new Date());
+
+// Pagination state
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
 
 // Update current date every minute
 const updateCurrentDate = () => {
@@ -611,6 +691,39 @@ const isFormValid = computed(() => {
   return form.value.business_id && form.value.weather;
 });
 
+// Pagination computed properties
+const totalRecords = computed(() => props.records.length);
+const totalPages = computed(() => Math.ceil(totalRecords.value / itemsPerPage.value));
+const paginatedRecords = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value;
+  const end = start + itemsPerPage.value;
+  return props.records.slice(start, end);
+});
+
+const paginationInfo = computed(() => {
+  const start = (currentPage.value - 1) * itemsPerPage.value + 1;
+  const end = Math.min(currentPage.value * itemsPerPage.value, totalRecords.value);
+  return `${start}-${end} z ${totalRecords.value}`;
+});
+
+const getVisiblePages = computed(() => {
+  const pages = [];
+  const maxVisiblePages = 5;
+  let startPage = Math.max(1, currentPage.value - Math.floor(maxVisiblePages / 2));
+  let endPage = Math.min(totalPages.value, startPage + maxVisiblePages - 1);
+  
+  // Adjust start page if we're near the end
+  if (endPage - startPage + 1 < maxVisiblePages) {
+    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+  }
+  
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push(i);
+  }
+  
+  return pages;
+});
+
 // Watchers
 watch(
   () => form.value.business_id,
@@ -622,6 +735,16 @@ watch(
       editBusinessForm.value = biz ? JSON.parse(JSON.stringify(biz)) : {};
     } else {
       editBusinessForm.value = {};
+    }
+  }
+);
+
+// Reset to first page when records change
+watch(
+  () => props.records.length,
+  () => {
+    if (currentPage.value > totalPages.value) {
+      currentPage.value = 1;
     }
   }
 );
@@ -748,6 +871,30 @@ const copyBusinessHoursToAllDays = () => {
       dayHours.close = firstDayHours.close;
     }
   });
+};
+
+// Pagination methods
+const goToPage = (page) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
+  }
+};
+
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++;
+  }
+};
+
+const prevPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--;
+  }
+};
+
+const changeItemsPerPage = (newItemsPerPage) => {
+  itemsPerPage.value = newItemsPerPage;
+  currentPage.value = 1; // Reset to first page when changing items per page
 };
 
 // Load form data from localStorage on component mount
